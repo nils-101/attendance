@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>RSVP Desk – Attendance confirmation</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles.css">
+<script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js" defer></script>
+<script src="app.js" defer></script>
+</head>
+<body>
+<div class="shell">
+  <aside class="side">
+    <div class="brand">
+      <span class="mark" aria-hidden="true">✓</span>
+      <div><b>RSVP Desk</b><span id="brandEvent">Not connected</span></div>
+    </div>
+    <nav aria-label="Sections">
+      <button class="nav" data-view="dashboard" aria-current="page">Dashboard</button>
+      <button class="nav" data-view="import">Add people</button>
+      <button class="nav" data-view="email">Email &amp; send</button>
+      <button class="nav" data-view="setup">Setup</button>
+    </nav>
+    <div class="live" id="liveState"><span class="dot"></span><span id="liveText">Offline</span></div>
+  </aside>
+
+  <main>
+    <!-- DASHBOARD -->
+    <section class="view" id="view-dashboard">
+      <header class="top">
+        <div>
+          <h1 id="dashTitle">Attendance</h1>
+          <p class="muted" id="dashSub">Connect your backend in Setup to get started.</p>
+        </div>
+        <div class="top-actions">
+          <button class="btn ghost" id="refreshBtn">Refresh</button>
+          <button class="btn ghost" id="exportBtn">Export to Excel</button>
+          <button class="btn" id="resendBtn">Resend to pending</button>
+        </div>
+      </header>
+
+      <div class="stats">
+        <div class="stat"><span class="n" id="sContacted">0</span><span class="l">Contacted</span></div>
+        <div class="stat st-yes"><span class="n" id="sConfirmed">0</span><span class="l">✓ Confirmed</span></div>
+        <div class="stat st-no"><span class="n" id="sDeclined">0</span><span class="l">✕ Declined</span></div>
+        <div class="stat st-wait"><span class="n" id="sPending">0</span><span class="l">◷ No reply yet</span></div>
+        <div class="stat rate">
+          <span class="n" id="sRate">0%</span><span class="l">Confirmed of contacted</span>
+          <div class="bar" aria-hidden="true"><i class="b-yes" id="barYes"></i><i class="b-no" id="barNo"></i></div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <div class="toolbar">
+          <div class="filters" role="group" aria-label="Filter by status">
+            <button data-f="all" aria-pressed="true">All <em id="fAll">0</em></button>
+            <button data-f="confirmed" aria-pressed="false">Confirmed <em id="fConfirmed">0</em></button>
+            <button data-f="declined" aria-pressed="false">Declined <em id="fDeclined">0</em></button>
+            <button data-f="pending" aria-pressed="false">Pending <em id="fPending">0</em></button>
+            <button data-f="unsent" aria-pressed="false">Not emailed <em id="fUnsent">0</em></button>
+          </div>
+          <input type="search" id="search" placeholder="Search names or emails" aria-label="Search">
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Name</th><th>Email</th><th>Attendance status</th><th>Responded</th><th>Emails sent</th><th><span class="sr">Actions</span></th></tr></thead>
+            <tbody id="guestRows"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="panel summary">
+        <h2>Final attendance summary</h2>
+        <p id="summaryText" class="muted">No data yet.</p>
+      </div>
+    </section>
+
+    <!-- IMPORT -->
+    <section class="view" id="view-import" hidden>
+      <header class="top"><div><h1>Add people</h1><p class="muted">Upload a file or paste names. Emails are created as FirstName.LastName@edu.escp.eu, and you can edit anything before saving.</p></div></header>
+
+      <div class="grid2">
+        <div class="panel">
+          <h2>Upload Excel or CSV</h2>
+          <label class="drop" for="fileInput">
+            <input type="file" id="fileInput" accept=".xlsx,.xls,.csv">
+            <b>Choose a file</b><span>Columns can be “Name”, or “First name” and “Last name”.</span>
+          </label>
+        </div>
+        <div class="panel">
+          <h2>Or paste a list</h2>
+          <textarea id="pasteBox" placeholder="John Smith&#10;Sarah Johnson&#10;Brown, James"></textarea>
+          <button class="btn ghost" id="pasteBtn">Read names</button>
+        </div>
+      </div>
+
+      <div class="panel" id="draftPanel" hidden>
+        <div class="toolbar">
+          <h2 id="draftTitle">Review</h2>
+          <div class="top-actions">
+            <button class="btn ghost" id="draftClear">Clear</button>
+            <button class="btn" id="draftSave">Add to guest list</button>
+          </div>
+        </div>
+        <p class="muted" id="draftNote"></p>
+        <div class="table-wrap">
+          <table class="edit">
+            <thead><tr><th>First name</th><th>Last name</th><th>Email</th><th>Check</th><th><span class="sr">Remove</span></th></tr></thead>
+            <tbody id="draftRows"></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- EMAIL -->
+    <section class="view" id="view-email" hidden>
+      <header class="top"><div><h1>Email &amp; send</h1><p class="muted">Customise the message, check the preview, then approve sending.</p></div></header>
+      <div class="grid2">
+        <div class="panel">
+          <h2>Message</h2>
+          <label>Event name<input id="setEvent"></label>
+          <label>Subject line<input id="setSubject"></label>
+          <label>Message<textarea id="setMessage" rows="6"></textarea></label>
+          <p class="hint">The YES and NO buttons are added automatically after this text.</p>
+          <label>Closing<textarea id="setClosing" rows="4"></textarea></label>
+          <label>Organisation / team name<input id="setOrg"></label>
+          <label>Replies go to (optional)<input id="setReplyTo" type="email" placeholder="you@edu.escp.eu"></label>
+          <p class="hint">You can use {firstName}, {lastName}, {eventName} and {organisation}.</p>
+          <div class="top-actions"><button class="btn" id="saveSettings">Save message</button></div>
+          <p class="status" id="settingsStatus" role="status"></p>
+        </div>
+        <div>
+          <div class="panel">
+            <h2>Preview</h2>
+            <div class="preview" id="preview"></div>
+            <div class="test-row">
+              <input type="email" id="testTo" placeholder="Your email" aria-label="Send a test to">
+              <button class="btn ghost" id="testBtn">Send me a test</button>
+            </div>
+            <p class="status" id="testStatus" role="status"></p>
+          </div>
+          <div class="panel approve">
+            <h2>Approve and send</h2>
+            <p id="sendInfo" class="muted"></p>
+            <label class="check"><input type="checkbox" id="approveBox"> <span id="approveLabel">I’ve checked the preview and want to send it.</span></label>
+            <button class="btn" id="sendBtn" disabled>Send emails</button>
+            <p class="status" id="sendStatus" role="status"></p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- SETUP -->
+    <section class="view" id="view-setup" hidden>
+      <header class="top"><div><h1>Setup</h1><p class="muted">Connect this dashboard to your Google Apps Script backend. Full steps are in the README.</p></div></header>
+      <div class="panel narrow">
+        <label>Web App URL<input id="cfgUrl" placeholder="https://script.google.com/macros/s/…/exec"></label>
+        <label>Admin key<input id="cfgKey" type="password" autocomplete="off"></label>
+        <p class="hint">Saved only in this browser. It is never stored on GitHub.</p>
+        <div class="top-actions">
+          <button class="btn" id="connectBtn">Connect</button>
+          <button class="btn ghost" id="disconnectBtn">Forget on this device</button>
+        </div>
+        <p class="status" id="connectStatus" role="status"></p>
+      </div>
+    </section>
+  </main>
+</div>
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+</body>
+</html>
